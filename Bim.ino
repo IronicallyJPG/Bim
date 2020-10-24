@@ -1,6 +1,6 @@
 /*
 
-    PURPOSE         : Simple Game using Arduino Hardware/Software/EEPROM
+    PURPOSE         : A Game using Arduino(MEGA2560R3) and an 1.8" 128x160 TFT_LCD_DISPLAY
                      
     DATE STARTED    : 10-17-2020
 
