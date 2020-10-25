@@ -138,7 +138,7 @@ unsigned short TEMP[100];
 
 // Game Data
 int diff = 1; // Difficulty
-unsigned int playerData[] = {5,70};// { Lives, Score}
+unsigned int playerData[] = {5,0};// { Lives, Score}
 
 // Longs for tracking the delay between specific actions.
 long food_ate = 0;          // The time in millis() when food was ate.
@@ -181,7 +181,7 @@ const int EnemyMoveDelay = 500; // A MINIMUM Delay for enemies to make a minimum
 const int food_delay = 300;     // A FIXED Delay for how soon food should gen after being taken.
 const int superDelay = 5000;    // Delay between Super Foods spawns.
 const int superScoreReq = 200;  // Minimum Score needed for SuperFoods to spawn
-const int superOdds = 50;        // Out a 100
+const int superOdds = 10;       // Out a 100
 
 // Analog Storage variable. Nothing more. Made GLOBAL!
 int xin = 0;
