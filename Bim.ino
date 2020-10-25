@@ -543,8 +543,8 @@ void updateMuggers() {
     if (EnemyPOS[12] == 1) {
         SCR.fillRect(EnemyPOS[0], EnemyPOS[1], 10, 10, TFT_BLACK);
     POS_A:
-            EnemyPOS[0] = getRandom(maxX, minX+50);
-            EnemyPOS[1] = getRandom(maxY, minY);
+            EnemyPOS[0] = getRandom(minX + 30, maxX - 30);
+            EnemyPOS[1] = getRandom(minY + 15, maxY - 15);
             if (Collision(EnemyPOS[0], EnemyPOS[1], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_A;
             }
@@ -568,8 +568,8 @@ void updateMuggers() {
     if (EnemyPOS[13] == 1) {
         SCR.fillRect(EnemyPOS[2], EnemyPOS[3], 10, 10, TFT_BLACK);
         POS_B:
-            EnemyPOS[2] = getRandom(maxX, minX);
-            EnemyPOS[3] = getRandom(maxY, minY+50);
+            EnemyPOS[2] = getRandom(minX + 30, maxX - 30);
+            EnemyPOS[3] = getRandom(minY + 15, maxY - 15);
             if (Collision(EnemyPOS[2], EnemyPOS[3], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_B;
             }
@@ -593,8 +593,8 @@ void updateMuggers() {
     if (EnemyPOS[14] == 1) {
         SCR.fillRect(EnemyPOS[4], EnemyPOS[5], 10, 10, TFT_BLACK);
         POS_C:
-            EnemyPOS[4] = getRandom(maxX, minX);
-            EnemyPOS[5] = getRandom(maxY-40, minY);
+            EnemyPOS[4] = getRandom(minX + 30, maxX - 30);
+            EnemyPOS[5] = getRandom(minY + 15, maxY - 15);
             if (Collision(EnemyPOS[4], EnemyPOS[5], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_C;
             }
@@ -618,8 +618,8 @@ void updateMuggers() {
     if (EnemyPOS[15] == 1) {
         SCR.fillRect(EnemyPOS[6], EnemyPOS[7], 10, 10, TFT_BLACK);
         POS_D:
-            EnemyPOS[6] = getRandom(maxX-50, minX);
-            EnemyPOS[7] = getRandom(maxY, minY);
+            EnemyPOS[6] = getRandom(minX + 30, maxX - 30);
+            EnemyPOS[7] = getRandom(minY + 15, maxY - 15);
             if (Collision(EnemyPOS[6], EnemyPOS[7], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_D;
             }
@@ -646,15 +646,15 @@ void updateMuggers() {
 void updateFood() {
     // Runs through the logic of making new food.
     if (makeNewFood == 1 && ((millis() - food_ate) > food_delay)) {
-        if (diff > 1 && (getRandom(1,100)<(superOdds+(diff*2)))) { // Low odds for Super food.
+        if (diff > 1 && (getRandom(0,100)<(superOdds+(diff*2)))) { // Low odds for Super food.
            superFood = true;
         }
         else {
            superFood = false;
         }
     FoodGen:
-        FoodPOS[0] = getRandom(maxX, minX);
-        FoodPOS[1] = getRandom(maxY, minY);
+        FoodPOS[0] = getRandom(minX, maxX);
+        FoodPOS[1] = getRandom(minY, maxY);
         if (Collision(FoodPOS[0], FoodPOS[1], playerPOS[0], playerPOS[1]) == true) {
             goto FoodGen;
         }
