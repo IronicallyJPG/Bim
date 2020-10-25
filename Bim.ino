@@ -6,7 +6,7 @@
 
     AUTHOR          : Bails
 
-    SOURCE_VERSION  : ALPHA
+    SOURCE_VERSION  : BETA
 
 */
 //===============================================================
@@ -15,7 +15,7 @@
 // Faster TFT Library
 #include <TFT_ST7735.h> // Graphics and font library for ST7735 driver chip <FROM BODMER-TFT Library!>
 #include <SPI.h>        // SPI Hardware library.                            <FROM BODMER-TFT Library!>
-#include <EEPROM.h>     // EEPROM Library for Reading/Writing PERSISTENT Data
+#include <EEPROM.h>     // EEPROM Library for Reading/Writing PERSISTENT Data (Highscore's Mostly)
 
 //===============================================================
 // Any Hardware Pin DEFINES needed. ex: define red_led 5
@@ -140,13 +140,6 @@ unsigned short TEMP[100];
 int diff = 1; // Difficulty
 unsigned int playerData[] = {5,70};// { Lives, Score}
 
-
-
-
-
-// Food POS's althought the game only needs one for now
-
-
 // Longs for tracking the delay between specific actions.
 long food_ate = 0;          // The time in millis() when food was ate.
 long food_last_frame = 0;   // Millis time from last frame updated for the food.
@@ -188,7 +181,7 @@ const int EnemyMoveDelay = 500; // A MINIMUM Delay for enemies to make a minimum
 const int food_delay = 300;     // A FIXED Delay for how soon food should gen after being taken.
 const int superDelay = 5000;    // Delay between Super Foods spawns.
 const int superScoreReq = 200;  // Minimum Score needed for SuperFoods to spawn
-const int superOdds = 10;        // Out a 100
+const int superOdds = 50;        // Out a 100
 
 // Analog Storage variable. Nothing more. Made GLOBAL!
 int xin = 0;
@@ -216,8 +209,8 @@ const int minY = 15;
 // Debug Stuff.
 bool dbg = 0; // Will be used later. Right now only Toggles an LED-Purple shift.
 int dbg_delay = 0; // The Delay for toggling the DBG toggle. To prevent spam.
-//                             2                       7             
-
+//                  2     8   12                                   
+char dbginfo[] = "L-0  SF-0  \0";
 //--
 
 //========================================================================================
@@ -226,7 +219,10 @@ int dbg_delay = 0; // The Delay for toggling the DBG toggle. To prevent spam.
 // Setup stuff. ex: Hardware init's, default rgb colors, any calibration needed
 // TRY NOT TO USE CUSTOM FUNCTIONS HERE!
 void setup() {
-    setLED(255, 0, 0);
+    setLED(255, 0, 0); // Red light shows that the game is NOT Ready.
+
+    // Serial Should NOT be left in the final version. It is a debugging tool
+    //Serial.begin(9600);
 
     // Pinmodes for the Analog Joystick
     pinMode(joyHat, INPUT_PULLUP);
@@ -238,16 +234,16 @@ void setup() {
     SCR.fillScreen(TFT_BLACK);
     DrawBorder();                                   // Done to setup the game.
     SCR.setTextColor(TFT_WHITE);
-    SCR.drawString("Welcome to BIM!", 10, 60, 2);
-    SCR.drawString("By Bailey", 10, 80, 2);
+    SCR.drawString("Welcome to BIM!",   10, 60, 2);
+    SCR.drawString("By Bailey",         10, 80, 2);
     SCR.setTextColor(TFT_RED);
-    SCR.drawString("V-BETA", 10, 100, 1); // Show the VERSION
+    SCR.drawString("V-BETA",           10, 100, 1); // Show the VERSION
     delay(3000);
     SCR.fillRect(10, 60, 100, 80, TFT_BLACK);       // This Blacks out the Title Card.
     drawIcon(Bim, playerPOS[0], playerPOS[1]);
-    setLED(0,255,0);// We show a GREEN light at the end to represent a GO Status for the program
     delay(500);     // Delay Before Handing control over to player.
     gameState = 1; // Jumps Straight into the Main gameloop after Setup completes.
+    setLED(0, 255, 0);// We show a GREEN light at the end to represent a GO Status for the program
 }
 
 //========================================================================================
@@ -268,14 +264,13 @@ void setup() {
 
 // This Specific function is made to store/record the Analog input, 
 // THEN start a chain of functions to update player POS. NOT Draw them.
+//==
+// TODO: REWRITE THIS to accomodate gameStates and getting input for them.
 void READ_INPUT() {
-    setLED(0,0,255); // DBG LED USE
     if ((millis() - LastMoved) < TimeDelay) {
         return; // Dont't spam movement.
     }
-    else {
-        LastMoved = millis();
-    }
+    LastMoved = millis();
     // Special INPUTs checked here. ex: Joystick hat button
     if (digitalRead(joyHat) == LOW) {
         ToggleDebugLight();
@@ -309,6 +304,7 @@ void READ_INPUT() {
 
 // This one is for translating the analog input to a specific action.
 void MOVE_PLAYER(int dir) {
+    if (gameState != 1)return;
     switch (dir) {
         default:
            // This should't happen.
@@ -330,6 +326,7 @@ void MOVE_PLAYER(int dir) {
 
 // This updates the playerPOS and saves the old POS for graphics to wipe it.
 void updatePlayerPOS(int newX, int newY) {
+    if (gameState != 1)return;
     SCR.fillRect(playerPOS[0], playerPOS[1], 10,10,TFT_BLACK);
     if ((newX > maxX) || (newX < minX) || (newY >= maxY) || (newY <= minY)) {
         // These Checks are for Making sure the player does NOT move OUT OF BOUNDS
@@ -360,6 +357,7 @@ void updatePlayerPOS(int newX, int newY) {
 // Drawing Functions here.
 // Player Drawing
 void drawPlayer() {
+    if (gameState != 1)return;
     if (_drawPlayer == true) {
         drawIcon(Bim, playerPOS[0], playerPOS[1]);    // THEN Draw at the NEW POS
         _drawPlayer = false;                  // Sets the FLAG to stop an unneccesary flaw.
@@ -369,6 +367,7 @@ void drawPlayer() {
 // Draws the bad guys, muggers.
 // This Should be reworked later to support other flags.
 void drawBads() {
+    if (gameState != 1)return;
     // We'll use the difficulty to determine amt of enemies to draw and check for.
     if (EnemyPOS[8] == 1) {
         drawIcon(Mugger, EnemyPOS[0], EnemyPOS[1]);
@@ -390,6 +389,7 @@ void drawBads() {
 
 // Draws the Food Items for Score
 void drawFood() {
+    if (gameState != 1)return;
     // DRAW a Food.
     if (makeNewFood == 0 && superFood == 0) {
         drawIcon(Apple, FoodPOS[0], FoodPOS[1]);
@@ -401,6 +401,7 @@ void drawFood() {
 
 // Draws the Score Information
 void drawScore() {
+    if (gameState != 1)return;
     if (_drawScore == 0) {
         return; // Don't Run unless needed.
     }
@@ -433,17 +434,27 @@ void DrawMUGGED_POPUP() {
     SCR.setTextColor(TFT_BLACK);
     SCR.drawString("YOU HAVE BEEN",minX+10, minY+40, 2);
     SCR.drawString("MUGGED!", minX + 10, minY + 60, 2);
-    SCR.drawString(livesinfo, minX+5, minY+80, 2);
+    SCR.drawString(livesinfo, minX + 10, minY + 90, 2);
+    for (int i = 0; i < 10; i++) {
+        delay(250);
+        SCR.setTextColor(TFT_WHITE);
+        SCR.drawString(livesinfo, minX + 10, minY + 90, 2);
+        delay(250);
+        SCR.setTextColor(TFT_BLACK);
+        SCR.drawString(livesinfo, minX + 10, minY + 90, 2);
+    }
 }
 
 void DrawGAMEOVER_POPUP() {
 
 }
 
+// Show this when a new Highscore is Achieved. 
 void DrawHIGHSCORE_POPUP() {
 
 }
 
+// This is the Highscore MENU draw code. NOT the popup.
 void DrawHIGHSCORE_MENU() {
 
 }
@@ -451,8 +462,9 @@ void DrawHIGHSCORE_MENU() {
 // A Debug Overlay. 
 void DrawDebugInfo() {
     SCR.setTextColor(0xFFFF);
-    livesinfo[7] = (playerData[0]+48);
-    SCR.drawString(livesinfo, 5, 20, 1);
+    dbginfo[2] = (playerData[0]+48);
+    dbginfo[8] = String(superFood)[0];
+    SCR.drawString(dbginfo, 5, 20, 1);
 }
 
 // Draw Bitmap function from the Faster TFT library. (Bodmer-ST7735)
@@ -634,7 +646,7 @@ void updateMuggers() {
 void updateFood() {
     // Runs through the logic of making new food.
     if (makeNewFood == 1 && ((millis() - food_ate) > food_delay)) {
-        if (diff > 1 && (getRandom(0,100)<(superOdds+(diff*2)))) { // Low odds for Super food.
+        if (diff > 1 && (getRandom(1,100)<(superOdds+(diff*2)))) { // Low odds for Super food.
            superFood = true;
         }
         else {
@@ -749,8 +761,6 @@ void CheckMuggedStatus() {
         else {
             playerData[1] = 0;
         }
-        
-        delay(5000);
         playerPOS[0] = minX+1;
         playerPOS[1] = minY+1;
         switch (diff) {
@@ -813,26 +823,27 @@ void ToggleDebugLight() {
     }
     if (dbg == true) {
         dbg = false;
-        setLED(0,255,0);
+        setLED(0,255,0); // Set the LED Blue to symbolize the DBG mode being OFF AKA Standard Play
         dbg_delay = millis();
         SCR.setTextColor(TFT_WHITE);
         SCR.drawString("DEBUG_OFF", 20, 80, 2);
-        delay(1000);
+        delay(500);
         SCR.fillRect(20, 80, 80, 30, TFT_BLACK);
-        return;
+    } else {
+        dbg = true;
+        dbg_delay = millis();
+        SCR.setTextColor(TFT_WHITE);
+        SCR.drawString("DEBUG_ON", 20, 80, 2);
+        delay(500);
+        SCR.fillRect(20, 80, 80, 30, TFT_BLACK);
+        drawPlayer();
+        setLED(0, 0, 255); // Set the LED Blue to symbolize the DBG mode being ON
     }
-    dbg_delay = millis();
-    dbg = true;
-    SCR.setTextColor(TFT_WHITE);
-    SCR.drawString("DEBUG_ON", 20, 80, 2);
-    delay(1000);
-    SCR.fillRect(20, 80, 80, 30, TFT_BLACK);
-    drawPlayer();
-    setLED(255,0,255);
+    
 }
 
 // RNG for the Spawns with given random vars.
-int getRandom(int upper, int lower) {
+int getRandom(int lower, int upper) {
     return ((rand() % (upper - lower + 1)) + lower);
 }
 
@@ -842,7 +853,7 @@ int getRandom(int upper, int lower) {
 
 // Default Loop Code. Fill with main loop of program, LAST FUNCTION IN FILE! As it will be the last function run.
 void loop() {
-    // Game State 1 is standard game-play
+    // Game State 1 is standard game-play loop
     if (gameState == 1) {
         // We let the player move FIRST.
         READ_INPUT(); // Check for any INPUT.
