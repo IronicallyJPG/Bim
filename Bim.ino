@@ -1,6 +1,6 @@
 /*
 
-    PURPOSE         : A Game using Arduino(MEGA2560R3) and an 1.8" 128x160 TFT_LCD_DISPLAY
+    PURPOSE         : A Game using Arduino(MEGA2560R3) /  1.8" 128x160 TFT_LCD_DISPLAY / Standard 5 Pin Analog Joystick
                      
     DATE STARTED    : 10-17-2020
 
@@ -54,6 +54,7 @@
 #define MAX_GAME_TIME 300000
 #define MAX_LIVES 5
 #define BORDER_COLOR 0xFFFF
+
 
 //===============================================================
 // Any NON-HARDWARE DEFINES needed.   ex: define width 10
@@ -128,7 +129,7 @@ const unsigned short Mugger[] PROGMEM = {
 
 
 // THIS IS A TEMPORARY ARRAY FOR IMG_MANIPULATION 
-// EX: Copying Array into here when making a 'Gold' or flashing sprite. ONLY ONE AT A TIME!
+// EX: Copying Array into here when making a custom sprite IN_GAME. ONLY ONE AT A TIME!
 unsigned short TEMP[100];
 //--
 
@@ -138,7 +139,8 @@ unsigned short TEMP[100];
 
 // Game Data
 int diff = 1; // Difficulty
-unsigned int playerData[] = {5,0};// { Lives, Score}
+unsigned int playerData[] = {3,0};// { Lives, Score}
+byte JoyDir[] = {0,0,0,0}; // UP,DOWN,LEFT,RIGHT
 
 // Longs for tracking the delay between specific actions.
 long food_ate = 0;          // The time in millis() when food was ate.
@@ -173,8 +175,10 @@ char scorecard[15] = {'S', 'C', 'O', 'R', 'E', ':', ' ', '0', '\0'};
 char livesinfo[] =   {'L', 'I', 'V', 'E', 'S' ,':', ' ', '5', '\0' };
 
 // A delay to control updating the GFX Stuff. NOT For Game-Actions
-int TimeDelay = 10;
-long LastMoved = 0;
+int inputDelay_Menu = 100; // Used for the Menu inputs, as not to 'Super Spam' them.
+int inputDelay_Game = 10;
+long lastInput = 0;
+long timePassed = 0;
 
 // Delay Timers for various things.
 const int EnemyMoveDelay = 500; // A MINIMUM Delay for enemies to make a minimum movement.
@@ -216,18 +220,20 @@ char dbginfo[] = "L-0  SF-0  \0";
 //========================================================================================
 //========================================================================================
 //========================================================================================
-// Setup stuff. ex: Hardware init's, default rgb colors, any calibration needed
+// Setup stuff. ex: Hardware init's, default rgb colors, any calibration/detection needed
 // TRY NOT TO USE CUSTOM FUNCTIONS HERE!
 void setup() {
-    setLED(255, 0, 0); // Red light shows that the game is NOT Ready.
+    setLED(255, 0, 0); // Red light shows that the game is NOT Ready. BUT That the Game has started setup.
 
     // Serial Should NOT be left in the final version. It is a debugging tool
     //Serial.begin(9600);
 
     // Pinmodes for the Analog Joystick
-    pinMode(joyHat, INPUT_PULLUP);
+    pinMode(joyHat, INPUT_PULLUP); 
     pinMode(joyX, INPUT);
     pinMode(joyY, INPUT);
+
+    
 
     // Init LCD to start outputing to it.
     SCR.init();
@@ -238,11 +244,20 @@ void setup() {
     SCR.drawString("By Bailey",         10, 80, 2);
     SCR.setTextColor(TFT_RED);
     SCR.drawString("V-BETA",           10, 100, 1); // Show the VERSION
-    delay(3000);
+    delay(2000);
     SCR.fillRect(10, 60, 100, 80, TFT_BLACK);       // This Blacks out the Title Card.
+
+    // CHECK IF JOYSTICK IS PRESENT, IF NOT, This is not playable.
+    JoyCheck:
+    if (analogRead(joyX) <= 998 && analogRead(joyY) <= 998 && analogRead(joyX) >= 990 && analogRead(joyY) >= 990) {
+        POPUP_NOJOYSTICK();
+        goto JoyCheck;
+    }
+    // DO NOT PROCED WITHOUT JOYSTICK!
+
     drawIcon(Bim, playerPOS[0], playerPOS[1]);
     delay(500);     // Delay Before Handing control over to player.
-    gameState = 1; // Jumps Straight into the Main gameloop after Setup completes.
+    gameState = 1; // Jumps Straight into the Main gameloop after Setup completes. TODO: Make this jump to menu instead.
     setLED(0, 255, 0);// We show a GREEN light at the end to represent a GO Status for the program
 }
 
@@ -267,37 +282,73 @@ void setup() {
 //==
 // TODO: REWRITE THIS to accomodate gameStates and getting input for them.
 void READ_INPUT() {
-    if ((millis() - LastMoved) < TimeDelay) {
-        return; // Dont't spam movement.
+    timePassed = millis() - lastInput;
+    // NEW INPUT CODE
+    // Game Play Input Control
+    if (gameState == GAME_MODE && (timePassed > inputDelay_Game)) {
+        lastInput = millis();
+        rawInputRead(); // This function sets the JoyStick state that the rest of the code will 
+        for (int i = 0; i <= 3; i++) {
+            if (JoyDir[i] == 1) {
+                MOVE_PLAYER(i);
+            }
+        }
     }
-    LastMoved = millis();
-    // Special INPUTs checked here. ex: Joystick hat button
+    // Menu Input Control
+    if (gameState == MENU_MODE && (timePassed > inputDelay_Menu)) {
+        lastInput = millis();
+        rawInputRead();
+    }
+    JoyDir[0] = 0;
+    JoyDir[1] = 0;
+    JoyDir[2] = 0;
+    JoyDir[3] = 0;
+
+    // DEBUG CODE
     if (digitalRead(joyHat) == LOW) {
-        ToggleDebugLight();
+        ToggleDebugMode(); // This is obviously a Debug Toggle. Remove after DEV Complete
     }
+}
+
+// This Functions Reads the Raw Input and translates it to a stored button press variable.
+void rawInputRead() {
     xin = analogRead(joyX);
     yin = analogRead(joyY);
-    // X-Based Movement
-    if ((xin > 700 || xin < 300) && (yin < 600 && yin > 400)) {
-        if (xin < 300) {
-            // RIGHT
-            MOVE_PLAYER(3);
-        }
-        if (xin > 900) {
-            // LEFT
-            MOVE_PLAYER(2);
-        }
-    }
-    // Y-Based Movement
-    if ((yin > 600 || yin < 400) && (xin < 600 && xin > 400)) {
-
+    
+    // Y-Axis Reading
+    if ((yin > 600 || yin < 400)) {
         if (yin < 300) {
-            // UP
-            MOVE_PLAYER(0);
+            JoyDir[0] = 1;
+            JoyDir[1] = 0;
+            JoyDir[2] = 0;
+            JoyDir[3] = 0;
+            return;
         }
         if (yin > 900) {
-            // DOWN
-            MOVE_PLAYER(1);
+            JoyDir[1] = 1;
+            JoyDir[0] = 0;
+            JoyDir[2] = 0;
+            JoyDir[3] = 0;
+            return;
+        }
+    }
+    // X-Axis Reading
+    if ((xin > 700 || xin < 300)) {
+
+        if (xin < 300) {
+            JoyDir[3] = 1;
+            JoyDir[1] = 0;
+            JoyDir[2] = 0;
+            JoyDir[0] = 0;
+            return;
+        }
+
+        if (xin > 900) {
+            JoyDir[2] = 1;
+            JoyDir[1] = 0;
+            JoyDir[0] = 0;
+            JoyDir[3] = 0;
+            return;
         }
     }
 }
@@ -354,6 +405,7 @@ void updatePlayerPOS(int newX, int newY) {
 //========================================================================================
 //======== GRAPHICS AND DRAWING ==========================================================
 //========================================================================================
+
 // Drawing Functions here.
 // Player Drawing
 void drawPlayer() {
@@ -429,7 +481,7 @@ void DrawBorder() {
 }
 
 // Draws the MUGGED NOTIFICATION. Also Pausing the Game for 5 Seconds. After this Draw Call a Logic Function should take place.
-void DrawMUGGED_POPUP() {
+void POPUP_MUGGED() {
     SCR.fillRect(0, 0, 128, 160, TFT_RED);
     SCR.setTextColor(TFT_BLACK);
     SCR.drawString("YOU HAVE BEEN",minX+10, minY+40, 2);
@@ -445,25 +497,41 @@ void DrawMUGGED_POPUP() {
     }
 }
 
-void DrawGAMEOVER_POPUP() {
+// Game over popup/menu. Only gives player option of seeing highscores/entering their own.
+void POPUP_GAMEOVER() {
 
 }
 
 // Show this when a new Highscore is Achieved. 
-void DrawHIGHSCORE_POPUP() {
+void POPUP_HIGHSCORE() {
 
 }
 
 // This is the Highscore MENU draw code. NOT the popup.
-void DrawHIGHSCORE_MENU() {
+void MENU_HIGHSCORE() {
 
+}
+
+// Main Menu Draw code
+void MENU_MAIN() {
+
+}
+
+// ERROR POPUPS!
+// NO JOYSTICK POPUP
+void POPUP_NOJOYSTICK() {
+    SCR.setTextColor(TFT_WHITE);
+    SCR.drawString("ERROR!", 30, 60, 2);
+    SCR.drawString("NO JOYSTICK!", 10, 80, 2);
+    delay(500);
+    SCR.fillRect(10, 60, 100, 80, TFT_BLACK);       // This Blacks out the popup
 }
 
 // A Debug Overlay. 
 void DrawDebugInfo() {
     SCR.setTextColor(0xFFFF);
     dbginfo[2] = (playerData[0]+48);
-    dbginfo[8] = String(superFood)[0];
+    dbginfo[8] = (superFood+48);
     SCR.drawString(dbginfo, 5, 20, 1);
 }
 
@@ -499,7 +567,7 @@ void drawIcon(const unsigned short* icon, int16_t x, int16_t y) {
 
 // All Draw Calls into one General Function for the MainLoop to use.
 // ONLY THE DRAW CALLS FOR STANDARD PLAY
-void RunDrawCalls() {
+void gameDrawCalls() {
     drawFood();    // Draw the Food Objects.
     drawBads();     // Draw Muggers
     drawScore();    // Draw Score 
@@ -694,6 +762,12 @@ void moveSprite(int x, int y) {
 }
 
 // Collision Detection Function Wrapped here instead of Main-Logic loop.
+// HERE WE WILL CHECK COLLISIONS/WIPE SPRITES/CHANGE SCORE/ETC
+// 1st   : Check Collisions and do proper updates/set update variables.
+// 2nd   : Check if difficulty needs updated.
+// 3nd   : Update Food-Logic
+// 4th   : Update Enemy-Logic
+// 5th   : Player-Logic/Left over stuff
 void updateCollision() {
     // First CHECK FOR FOOD COLLISONS
     if (Collision(FoodPOS[0], FoodPOS[1], playerPOS[0], playerPOS[1]) == true && makeNewFood == 0) {
@@ -735,19 +809,14 @@ void updateCollision() {
         }
     }
 }
-// HERE WE WILL CHECK COLLISIONS/WIPE SPRITES/CHANGE SCORE/ETC
-// 1st   : Check Collisions and do proper updates/set update variables.
-// 2nd   : Check if difficulty needs updated.
-// 3nd   : Update Food-Logic
-// 4th   : Update Enemy-Logic
-// 5th   : Player-Logic/Left over stuff
+
 
 // Checks if the player was MUGGED! This is the LOGICAL CODE ONLY. The Drawing Code is a 2nd Function.
 void CheckMuggedStatus() {
     if (mugged==1) {
         playerData[0] = playerData[0] - 1;
         livesinfo[7] = (playerData[0] + 48);
-        DrawMUGGED_POPUP();
+        POPUP_MUGGED();
         // Clear the Scorecard so the new/old Score don't overlap
         for (int i = 0; i < String(playerData[1]).length(); i++) {
             scorecard[7 + i] = ' ';
@@ -817,10 +886,9 @@ void setLED(byte r, byte g, byte b) {
 }
 
 // DBG init Function
-void ToggleDebugLight() {
-    if ((millis() - dbg_delay) < 3000) {
-        return;
-    }
+void ToggleDebugMode() {
+    if ((millis() - dbg_delay) < 3000) return;
+    
     if (dbg == true) {
         dbg = false;
         setLED(0,255,0); // Set the LED Blue to symbolize the DBG mode being OFF AKA Standard Play
@@ -828,6 +896,11 @@ void ToggleDebugLight() {
         SCR.setTextColor(TFT_WHITE);
         SCR.drawString("DEBUG_OFF", 20, 80, 2);
         delay(500);
+        EnemyPOS[8] = 1;
+        EnemyPOS[9] = 1;
+        EnemyPOS[10] = 1;
+        EnemyPOS[11] = 1;
+        _drawPlayer = 1;
         SCR.fillRect(20, 80, 80, 30, TFT_BLACK);
     } else {
         dbg = true;
@@ -842,7 +915,7 @@ void ToggleDebugLight() {
     
 }
 
-// RNG for the Spawns with given random vars.
+// RNG with given range.
 int getRandom(int lower, int upper) {
     return ((rand() % (upper - lower + 1)) + lower);
 }
@@ -860,7 +933,7 @@ void loop() {
         drawPlayer(); // Let the Player Move
         // THEN Process their actions.
         RunLogic();     // Run through all the logic, this should mostly affect the MuggerAI / Update powerup odds/flags.
-        RunDrawCalls(); // Run through applicable Draw Calls.
+        gameDrawCalls(); // Run through applicable Draw Calls.
     }
     // Menu Loop
     if (gameState == 0) {
