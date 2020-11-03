@@ -51,8 +51,9 @@
 #define GAME_MODE 1
 #define HIGHSCORE_MODE 2
 #define CREDITS_MODE 3
-#define MAX_GAME_TIME 300000
-#define MAX_LIVES 5
+
+#define MAX_GAME_TIME 300 // In Seconds
+#define MAX_LIVES 3
 #define BORDER_COLOR 0xFFFF
 
 
@@ -130,7 +131,19 @@ const unsigned short Mugger[] PROGMEM = {
 
 // THIS IS A TEMPORARY ARRAY FOR IMG_MANIPULATION 
 // EX: Copying Array into here when making a custom sprite IN_GAME. ONLY ONE AT A TIME!
-unsigned short TEMP[100];
+unsigned short TEMP[100] = {
+    // 'supermugger', 10x10px
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
+};
 //--
 
 
@@ -139,7 +152,7 @@ unsigned short TEMP[100];
 
 // Game Data
 int diff = 1; // Difficulty
-unsigned int playerData[] = {3,0};// { Lives, Score}
+unsigned int playerData[] = {3,0,0};// { Lives, Score, timeplayed}
 byte JoyDir[] = {0,0,0,0}; // UP,DOWN,LEFT,RIGHT
 
 // Longs for tracking the delay between specific actions.
@@ -153,10 +166,13 @@ long food_last_frame = 0;   // Millis time from last frame updated for the food.
 // STATE_3: CREDITS_MODE
 byte gameState = GAME_MODE; // A CRITICAL Variable to keep track of how and what to render and utilize inputs. default is gameplay, TODO: MENU_MODE first.
 
+
+
 // POS's 
 // ALL Enemy DATA. With Draw/Update Flags.
-//                 A    B    C    D     DRAW FLAGS[8-11]  UPDATE FLAGS [12-15]   RandomMove Flags[16-20]
-int EnemyPOS[] = { 0,0, 0,0, 0,0, 0,0     , 0,0,0,0,            0,0,0,0,              0,0,0,0 };
+//                    CO-ORDS              offset 8              offset 12               offset 16
+//                 A    B    C    D     DRAW FLAGS[8-11]  RandomSPAWN Flags[12-15]    RandomMOVE Flags[16-19]
+int EnemyPOS[] = { 0,0, 0,0, 0,0, 0,0     ,0,0,0,0,            0,0,0,0,                    0,0,0,0,};
 int playerPOS[] = { 20, 20 };  // Player
 int FoodPOS[] = { 0, 0 }; // Food 
 
@@ -180,8 +196,14 @@ int inputDelay_Game = 10;
 long lastInput = 0;
 long timePassed = 0;
 
+long timeEnemyMove = 0;
+long timeEnemyPassed = 0;
+
+int GameTimer = 0;
+int counter = 0;
+
 // Delay Timers for various things.
-const int EnemyMoveDelay = 500; // A MINIMUM Delay for enemies to make a minimum movement.
+const int EnemyMoveDelay = 250; // A MINIMUM Delay for enemies to make a minimum movement.
 const int food_delay = 300;     // A FIXED Delay for how soon food should gen after being taken.
 const int superDelay = 5000;    // Delay between Super Foods spawns.
 const int superScoreReq = 200;  // Minimum Score needed for SuperFoods to spawn
@@ -191,8 +213,7 @@ const int superOdds = 10;       // Out a 100
 int xin = 0;
 int yin = 0;
 
-// These CONSTs have NO Reason to be updated/Changed. 
-// They are CONST for a reason. Core Gameplay/Settings
+// These are the Border Walls. Should be no reason to change unless screen size changes, which is not a variable in this project.
 const int BorderA[] = { 0,0, 128,15 };  // Top Border Bar ACCOUNTING FOR SCORE INFO
 const int BorderB[] = { 0,158, 128,2 }; // Bottom Border Bar
 const int BorderC[] = { 0,0, 2,160 };   // Left Side
@@ -213,7 +234,7 @@ const int minY = 15;
 // Debug Stuff.
 bool dbg = 0; // Will be used later. Right now only Toggles an LED-Purple shift.
 int dbg_delay = 0; // The Delay for toggling the DBG toggle. To prevent spam.
-//                  2     8   12                                   
+//                  2     8   11                                   
 char dbginfo[] = "L-0  SF-0  \0";
 //--
 
@@ -238,7 +259,9 @@ void setup() {
     // Init LCD to start outputing to it.
     SCR.init();
     SCR.fillScreen(TFT_BLACK);
-    DrawBorder();                                   // Done to setup the game.
+
+    // Draw Some base Game Stuff to the Screen. Including Title Card.
+    DrawBorders();                                   // Done to setup the game.
     SCR.setTextColor(TFT_WHITE);
     SCR.drawString("Welcome to BIM!",   10, 60, 2);
     SCR.drawString("By Bailey",         10, 80, 2);
@@ -246,18 +269,19 @@ void setup() {
     SCR.drawString("V-BETA",           10, 100, 1); // Show the VERSION
     delay(2000);
     SCR.fillRect(10, 60, 100, 80, TFT_BLACK);       // This Blacks out the Title Card.
-
+    //==========================================
     // CHECK IF JOYSTICK IS PRESENT, IF NOT, This is not playable.
+    // TODO: Work out bugs, does not always see the lack of a joystick.
     JoyCheck:
     if (analogRead(joyX) <= 998 && analogRead(joyY) <= 998 && analogRead(joyX) >= 990 && analogRead(joyY) >= 990) {
         POPUP_NOJOYSTICK();
         goto JoyCheck;
     }
-    // DO NOT PROCED WITHOUT JOYSTICK!
+    // DO NOT PROCED WITHOUT JOYSTICK! Can't play without it lol
 
     drawIcon(Bim, playerPOS[0], playerPOS[1]);
     delay(500);     // Delay Before Handing control over to player.
-    gameState = 1; // Jumps Straight into the Main gameloop after Setup completes. TODO: Make this jump to menu instead.
+    gameState = GAME_MODE; // Jumps Straight into the Main gameloop after Setup completes. TODO: Make this default to menu instead.
     setLED(0, 255, 0);// We show a GREEN light at the end to represent a GO Status for the program
 }
 
@@ -265,7 +289,7 @@ void setup() {
 //========================================================================================
 //========================================================================================
 //
-//   ALL FUNCTIONS BELOW ARE IN ORDER OF
+//   ALL FUNCTIONS-GROUPS BELOW ARE IN ORDER OF
 //   INPUT
 //   DRAWING
 //   LOGIC
@@ -290,7 +314,8 @@ void READ_INPUT() {
         rawInputRead(); // This function sets the JoyStick state that the rest of the code will 
         for (int i = 0; i <= 3; i++) {
             if (JoyDir[i] == 1) {
-                MOVE_PLAYER(i);
+                MOVE_PLAYER(i); // The Actual Player Movement Logic is done. NOT Draw calls.
+                break;
             }
         }
     }
@@ -299,12 +324,14 @@ void READ_INPUT() {
         lastInput = millis();
         rawInputRead();
     }
+
+    //Sets all the control flags back to 0. or OFF
     JoyDir[0] = 0;
     JoyDir[1] = 0;
     JoyDir[2] = 0;
     JoyDir[3] = 0;
 
-    // DEBUG CODE
+    // DEBUG CODE - This Will be heavily altered or removed before final version.
     if (digitalRead(joyHat) == LOW) {
         ToggleDebugMode(); // This is obviously a Debug Toggle. Remove after DEV Complete
     }
@@ -418,9 +445,12 @@ void drawPlayer() {
 
 // Draws the bad guys, muggers.
 // This Should be reworked later to support other flags.
-void drawBads() {
+void drawMuggers() {
+    // If the gamestate is anything but standard play, don't draw enemies.
     if (gameState != 1)return;
-    // We'll use the difficulty to determine amt of enemies to draw and check for.
+    // The only info we check for drawing muggers is their draw flag.
+    // This is set by logic functions.
+    // After we draw, we set the draw flag to 0, as not to spam their draw calls.
     if (EnemyPOS[8] == 1) {
         drawIcon(Mugger, EnemyPOS[0], EnemyPOS[1]);
         EnemyPOS[8] = 0;
@@ -473,11 +503,17 @@ void drawScore() {
 // Draws a Border around the screen.
 // Called when Drawing new border.
 // MAKE SURE TO RE-DRAW UI WHEN THIS IS CALLED!
-void DrawBorder() {
+void DrawBorders() {
     SCR.fillRect(BorderA[0], BorderA[1], BorderA[2], BorderA[3], BORDER_COLOR);
     SCR.fillRect(BorderB[0], BorderB[1], BorderB[2], BorderB[3], BORDER_COLOR);
     SCR.fillRect(BorderC[0], BorderC[1], BorderC[2], BorderC[3], BORDER_COLOR);
     SCR.fillRect(BorderD[0], BorderD[1], BorderD[2], BorderD[3], BORDER_COLOR);
+}
+
+// Simple Screen Wipe to black.
+void DrawBlackScreen() {
+    SCR.fillScreen(TFT_BLACK);
+    DrawBorders();
 }
 
 // Draws the MUGGED NOTIFICATION. Also Pausing the Game for 5 Seconds. After this Draw Call a Logic Function should take place.
@@ -517,7 +553,7 @@ void MENU_MAIN() {
 
 }
 
-// ERROR POPUPS!
+// ERROR POPUPS! 
 // NO JOYSTICK POPUP
 void POPUP_NOJOYSTICK() {
     SCR.setTextColor(TFT_WHITE);
@@ -536,13 +572,14 @@ void DrawDebugInfo() {
 }
 
 // Draw Bitmap function from the Faster TFT library. (Bodmer-ST7735)
-// Maximum icon size is <<255x255>> pixels to avoid integer overflow
+// Maximum icon size is <<255x255>> pixels to avoid integer overflow. 
+// NOTE: this Function currently only works with 10x10 Byte-Array-Images!
 void drawIcon(const unsigned short* icon, int16_t x, int16_t y) {
  
     uint16_t  pix_buffer[64];   // 64-Pixel Buffer (16 bits per pixel)
 
     // Set up a window the right size to stream pixels into
-    SCR.setAddrWindow(x, y, x + 10 - 1, y +10 - 1);
+    SCR.setAddrWindow(x, y, x + 10 - 1, y + 10 - 1);
 
     // Work out the number whole buffers to send
     uint16_t nb = ((uint16_t)10 * 10) / 64;
@@ -569,7 +606,7 @@ void drawIcon(const unsigned short* icon, int16_t x, int16_t y) {
 // ONLY THE DRAW CALLS FOR STANDARD PLAY
 void gameDrawCalls() {
     drawFood();    // Draw the Food Objects.
-    drawBads();     // Draw Muggers
+    drawMuggers();     // Draw Muggers
     drawScore();    // Draw Score 
     if (dbg==1) {
         DrawDebugInfo();
@@ -585,19 +622,19 @@ void gameDrawCalls() {
 // Difficulty Updater
 // Each IF should run ONCE. So we don't spam this code.
 void Difficultyupdate() {
-    if (playerData[1] > 99 && diff == 1 ) {
+    if (playerData[1] > 49 && diff == 1 ) {
         EnemyPOS[12] = 1;
         diff = 2; return;
     }
-    if(playerData[1] > 299 && diff == 2  ) {
+    if(playerData[1] > 149 && diff == 2  ) {
         EnemyPOS[13] = 1;
         diff = 3; return;
     }
-    if (playerData[1] > 599 && diff == 3 ) {
+    if (playerData[1] > 349 && diff == 3 ) {
         EnemyPOS[14] = 1;
         diff = 4; return;
     }
-    if (playerData[1] > 999 && diff == 4) {
+    if (playerData[1] > 599 && diff == 4){
         EnemyPOS[15] = 1;
         diff = 5; return;
     }
@@ -606,13 +643,14 @@ void Difficultyupdate() {
 // Updates/Sets Bad Guys Logic/Positions
 void updateMuggers() {
     // Work through the Muggers ONE at a time.
-    //=============================================================================================
-    // 1st Enemy
+    // First Check if they need to do a RandomSPAWN. THEN Check if they have a move pending.
+    // 1st Enemy RandomSpawn Check
+    //==============================================================================================
     if (EnemyPOS[12] == 1) {
         SCR.fillRect(EnemyPOS[0], EnemyPOS[1], 10, 10, TFT_BLACK);
     POS_A:
             EnemyPOS[0] = getRandom(minX + 30, maxX - 30);
-            EnemyPOS[1] = getRandom(minY + 15, maxY - 15);
+            EnemyPOS[1] = getRandom(minY + 20, maxY - 20);
             if (Collision(EnemyPOS[0], EnemyPOS[1], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_A;
             }
@@ -632,12 +670,12 @@ void updateMuggers() {
             EnemyPOS[12] = 0;
     } 
     //=============================================================================================
-    // 2nd Enemy Update
+    // 2nd Enemy RandomSpawn Check
     if (EnemyPOS[13] == 1) {
         SCR.fillRect(EnemyPOS[2], EnemyPOS[3], 10, 10, TFT_BLACK);
         POS_B:
             EnemyPOS[2] = getRandom(minX + 30, maxX - 30);
-            EnemyPOS[3] = getRandom(minY + 15, maxY - 15);
+            EnemyPOS[3] = getRandom(minY + 20, maxY - 20);
             if (Collision(EnemyPOS[2], EnemyPOS[3], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_B;
             }
@@ -657,12 +695,12 @@ void updateMuggers() {
             EnemyPOS[13] = 0;
     }
     //=============================================================================================
-    // 3rd Enemy Update
+    // 3rd Enemy RandomSpawn Check
     if (EnemyPOS[14] == 1) {
         SCR.fillRect(EnemyPOS[4], EnemyPOS[5], 10, 10, TFT_BLACK);
         POS_C:
             EnemyPOS[4] = getRandom(minX + 30, maxX - 30);
-            EnemyPOS[5] = getRandom(minY + 15, maxY - 15);
+            EnemyPOS[5] = getRandom(minY + 20, maxY - 20);
             if (Collision(EnemyPOS[4], EnemyPOS[5], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_C;
             }
@@ -682,12 +720,12 @@ void updateMuggers() {
             EnemyPOS[14] = 0;
     }
     //=============================================================================================
-    // 4th Enemy Update
+    // 4th Enemy RandomSpawn Check
     if (EnemyPOS[15] == 1) {
         SCR.fillRect(EnemyPOS[6], EnemyPOS[7], 10, 10, TFT_BLACK);
         POS_D:
             EnemyPOS[6] = getRandom(minX + 30, maxX - 30);
-            EnemyPOS[7] = getRandom(minY + 15, maxY - 15);
+            EnemyPOS[7] = getRandom(minY + 20, maxY - 20);
             if (Collision(EnemyPOS[6], EnemyPOS[7], playerPOS[0], playerPOS[1]) == true) {
                 goto POS_D;
             }
@@ -706,6 +744,95 @@ void updateMuggers() {
             EnemyPOS[11] = 1;
             EnemyPOS[15] = 0;
     }
+    //=============================================================================================
+
+    // Check if any random moves get to occur.
+    // Set the appropriate move flag(s)
+    timeEnemyPassed = millis() - timeEnemyMove;
+    if ((timeEnemyPassed > (EnemyMoveDelay-(20*diff))) && (diff > 1)) {
+        timeEnemyMove = millis();
+        switch (getRandom(0, 3)) {
+        default: /*Do nothing*/break;
+        case 0:
+            if (diff < 2)return;
+            EnemyPOS[16] = 1;
+            break;
+        case 1:
+            if (diff < 3)return;
+            EnemyPOS[17] = 1;
+            break;
+        case 2:
+            if (diff < 4)return;
+            EnemyPOS[18] = 1;
+            break;
+        case 3:
+            if (diff < 5)return;
+            EnemyPOS[19] = 1;
+            break;
+        }
+    }
+    
+    //=============================================================================================
+    // 1st Enemy Move Check/Action
+    if (EnemyPOS[16] == 1) {
+        MoveMugger(0,1);
+        EnemyPOS[16] = 0;
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[2], EnemyPOS[3]) == true) {
+            EnemyPOS[9] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[4], EnemyPOS[5]) == true) {
+            EnemyPOS[10] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[6], EnemyPOS[7]) == true) {
+            EnemyPOS[11] = 1;
+        }
+    }
+    //=============================================================================================
+    // 1st Enemy Move Check/Action
+    if (EnemyPOS[17] == 1) {
+        MoveMugger(2,3);
+        EnemyPOS[17] = 0;
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[2], EnemyPOS[3]) == true) {
+            EnemyPOS[8] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[4], EnemyPOS[5]) == true) {
+            EnemyPOS[10] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[6], EnemyPOS[7]) == true) {
+            EnemyPOS[11] = 1;
+        }
+    }
+    //=============================================================================================
+    // 1st Enemy Move Check/Action
+    if (EnemyPOS[18] == 1) {
+        MoveMugger(4,5);
+        EnemyPOS[18] = 0;
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[2], EnemyPOS[3]) == true) {
+            EnemyPOS[9] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[4], EnemyPOS[5]) == true) {
+            EnemyPOS[8] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[6], EnemyPOS[7]) == true) {
+            EnemyPOS[11] = 1;
+        }
+    }
+    //=============================================================================================
+    // 1st Enemy Move Check/Action
+    if (EnemyPOS[19] == 1) {
+        MoveMugger(6,7);
+        EnemyPOS[19] = 0;
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[2], EnemyPOS[3]) == true) {
+            EnemyPOS[10] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[4], EnemyPOS[5]) == true) {
+            EnemyPOS[9] = 1;
+        }
+        if (Collision(EnemyPOS[0], EnemyPOS[1], EnemyPOS[6], EnemyPOS[7]) == true) {
+            EnemyPOS[8] = 1;
+        }
+    }
+    
 }
 
 // Checks/Updates Food logic
@@ -756,9 +883,36 @@ bool Collision(int x0, int y0, int x1, int y1) {
     return false;
 }
 
-// This will be used to create moving Muggers/Food
-void moveSprite(int x, int y) {
-    // TODO: Implement
+// This function will allow entities to randomly move.
+// The parameters are NOT the X,Y of the Mugger. The parameters are the EnemyPOS array reference numbers.
+void MoveMugger(int Eposx, int Eposy) {
+    SCR.fillRect(EnemyPOS[Eposx], EnemyPOS[Eposy], 10, 10, TFT_BLACK);
+    int newX = EnemyPOS[Eposx];
+    int newY = EnemyPOS[Eposy];
+    switch (getRandom(0,3)) {
+        case 0: newX = newX + 5; break;
+        case 1: newY = newY + 5; break;
+        case 2: newX = newX - 5; break;
+        case 3: newY = newY - 5; break;
+    }
+    // OUT OF Bounds check/Fix
+    if (newX > (maxX-20)) {
+        newX = (maxX - 20);
+    }
+    if (newX < (minX+20)) {
+        newX = (minX + 20);
+    }
+    if (newY > (maxY-20)) {
+       newY = (maxY - 20);
+    }
+    if (newY < (minY+20)) {
+        newY = (minY + 20);
+    }
+    
+    // Sets the Mugger POS. 
+    EnemyPOS[Eposx] = newX;
+    EnemyPOS[Eposy] = newY;
+    EnemyPOS[8+(Eposx-(Eposx/2))] = 1;
 }
 
 // Collision Detection Function Wrapped here instead of Main-Logic loop.
@@ -840,10 +994,10 @@ void CheckMuggedStatus() {
             case 5: EnemyPOS[12] = 1; EnemyPOS[13] = 1; EnemyPOS[14] = 1; EnemyPOS[15] = 1; break;
         }
         SCR.fillRect(0, 0, 128, 160, TFT_BLACK);
-        DrawBorder();
+        DrawBorders();
         _drawScore = 1;
         makeNewFood = 1;
-        drawPlayer();
+        _drawPlayer = 1;
         mugged = 0;
     }
 }
@@ -853,9 +1007,13 @@ void CheckMuggedStatus() {
 void CheckGAMEOVER() {
 
     // Check for LIVES = 0
-
+    if (playerData[0] == 0) {
+        // DEAD!
+    }
     // Check for TIMER reaching 0.
-
+    if (playerData[0] == 0) {
+        // DEAD!
+    }
 }
 
 // Run Through all the LOGICAL Code in this SPECIFIC Order.
@@ -874,7 +1032,6 @@ void RunLogic() {
     // Check if it's time to GAME_OVER The player
     CheckGAMEOVER();
     // Left Over Logic HERE!
-    // None yet.
 }
 // Misc Functions. Not LOGIC/DRAWING Code.
 // 
@@ -918,6 +1075,20 @@ void ToggleDebugMode() {
 // RNG with given range.
 int getRandom(int lower, int upper) {
     return ((rand() % (upper - lower + 1)) + lower);
+}
+
+/*
+    Writing to the rom should be done RARELY. 
+    Reading can happen without 
+*/
+bool SaveDataToRom(int location, byte data) {
+    // TODO: Write the 'Write' code.
+    // Should Return true if successful.
+}
+
+byte ReadDataFromRom(int location) {
+    // Return the value stored in ROM.
+    // TODO: Create a super function using this to create 
 }
 
 //========================================================================================
