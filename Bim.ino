@@ -638,9 +638,17 @@ void Difficultyupdate() {
         EnemyPOS[15] = 1;
         diff = 5; return;
     }
+    // POST Level 5 Difficulty increasing.
+    // New Feature. Needs Testing. Every 150-Score = Difficulty increase.
+    if (diff >= 5) {
+        if (playerData[1] > (150*diff)) {
+            diff++;
+        }
+    }
 }
 
 // Updates/Sets Bad Guys Logic/Positions
+// CURRENTLY 2 MAJOR USES: Randomly spawns the muggers AND Randomly moves them.
 void updateMuggers() {
     // Work through the Muggers ONE at a time.
     // First Check if they need to do a RandomSPAWN. THEN Check if they have a move pending.
@@ -749,10 +757,9 @@ void updateMuggers() {
     // Check if any random moves get to occur.
     // Set the appropriate move flag(s)
     timeEnemyPassed = millis() - timeEnemyMove;
-    if ((timeEnemyPassed > (EnemyMoveDelay-(20*diff))) && (diff > 1)) {
+    if ((timeEnemyPassed > (EnemyMoveDelay-(10*diff))) && (diff > 1)) {
         timeEnemyMove = millis();
         switch (getRandom(0, 3)) {
-        default: /*Do nothing*/break;
         case 0:
             if (diff < 2)return;
             EnemyPOS[16] = 1;
@@ -788,7 +795,7 @@ void updateMuggers() {
         }
     }
     //=============================================================================================
-    // 1st Enemy Move Check/Action
+    // 2nd Enemy Move Check/Action
     if (EnemyPOS[17] == 1) {
         MoveMugger(2,3);
         EnemyPOS[17] = 0;
@@ -803,7 +810,7 @@ void updateMuggers() {
         }
     }
     //=============================================================================================
-    // 1st Enemy Move Check/Action
+    // 3rd Enemy Move Check/Action
     if (EnemyPOS[18] == 1) {
         MoveMugger(4,5);
         EnemyPOS[18] = 0;
@@ -818,7 +825,7 @@ void updateMuggers() {
         }
     }
     //=============================================================================================
-    // 1st Enemy Move Check/Action
+    // 4th Enemy Move Check/Action
     if (EnemyPOS[19] == 1) {
         MoveMugger(6,7);
         EnemyPOS[19] = 0;
@@ -889,12 +896,27 @@ void MoveMugger(int Eposx, int Eposy) {
     SCR.fillRect(EnemyPOS[Eposx], EnemyPOS[Eposy], 10, 10, TFT_BLACK);
     int newX = EnemyPOS[Eposx];
     int newY = EnemyPOS[Eposy];
-    switch (getRandom(0,3)) {
-        case 0: newX = newX + 5; break;
-        case 1: newY = newY + 5; break;
-        case 2: newX = newX - 5; break;
-        case 3: newY = newY - 5; break;
+
+
+    // Random Move not 
+    // Move Certain Muggers VERTICALLY
+    if ((Eposx % 4) == 0) {
+        if (getRandom(0, 1) == 0) {
+            newY = newY - (5 + diff);
+        } else {
+            newY = newY + (5 + diff);
+        }
     }
+
+    // Move Certain Muggers HORIZONTILLY
+    if ((Eposx % 4) == 2) {
+        if (getRandom(0, 1) == 0) {
+            newX = newX - (5 + diff);
+        } else {
+            newX = newX + (5 + diff);
+        }
+    }
+
     // OUT OF Bounds check/Fix
     if (newX > (maxX-20)) {
         newX = (maxX - 20);
@@ -908,8 +930,9 @@ void MoveMugger(int Eposx, int Eposy) {
     if (newY < (minY+20)) {
         newY = (minY + 20);
     }
-    
+    //=============================
     // Sets the Mugger POS. 
+    // Then sets the appropriate flag to signal a new draw is needed for the mugger.
     EnemyPOS[Eposx] = newX;
     EnemyPOS[Eposy] = newY;
     EnemyPOS[8+(Eposx-(Eposx/2))] = 1;
