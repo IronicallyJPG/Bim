@@ -186,8 +186,8 @@ bool superFood = 0;     // FLAG to check if SuperFood needs to be generated next
 bool _drawScore = 1;
 bool _drawPlayer = 1;
 
-// Game STRING Variables       0         2         4         6         8
-char scorecard[15] = {'S', 'C', 'O', 'R', 'E', ':', ' ', '0', '\0'};
+// Game STRING Variables    1         3         5         7
+char scorecard[30] = {'S', 'C', 'O', 'R', 'E', ':', ' ', '0', '\0'};
 char livesinfo[] =   {'L', 'I', 'V', 'E', 'S' ,':', ' ', '5', '\0' };
 
 // A delay to control updating the GFX Stuff. NOT For Game-Actions
@@ -247,7 +247,7 @@ void setup() {
     setLED(255, 0, 0); // Red light shows that the game is NOT Ready. BUT That the Game has started setup.
 
     // Serial Should NOT be left in the final version. It is a debugging tool
-    //Serial.begin(9600);
+    // Serial.begin(9600);
 
     // Pinmodes for the Analog Joystick
     pinMode(joyHat, INPUT_PULLUP); 
@@ -269,7 +269,7 @@ void setup() {
     SCR.drawString("V-BETA",           10, 100, 1); // Show the VERSION
     delay(2000);
     SCR.fillRect(10, 60, 100, 80, TFT_BLACK);       // This Blacks out the Title Card.
-    //==========================================
+    //==========================================3.
     // CHECK IF JOYSTICK IS PRESENT, IF NOT, This is not playable.
     // TODO: Work out bugs, does not always see the lack of a joystick.
     JoyCheck:
@@ -535,22 +535,26 @@ void POPUP_MUGGED() {
 
 // Game over popup/menu. Only gives player option of seeing highscores/entering their own.
 void POPUP_GAMEOVER() {
+    // This POPUP is a temp flash of "GAME OVER" after game end is achieved.
 
 }
 
 // Show this when a new Highscore is Achieved. 
-void POPUP_HIGHSCORE() {
+void POPUP_ENTER_HIGHSCORE() {
+    // ONLY Call this sub-menu when the Player DIES and Has an eligble HIGHSCORE!
 
 }
 
 // This is the Highscore MENU draw code. NOT the popup.
 void MENU_HIGHSCORE() {
-
+    // The Highscore sub-menu
+    // Should return to the main menu REGARDLESS of how it's accessed. ie: death
 }
 
 // Main Menu Draw code
 void MENU_MAIN() {
-
+    // Will Draw a Main menu. 
+    // Only have 'play' and 'highscores'
 }
 
 // ERROR POPUPS! 
@@ -1032,10 +1036,17 @@ void CheckGAMEOVER() {
     // Check for LIVES = 0
     if (playerData[0] == 0) {
         // DEAD!
+        // We are going to INTERRUPT the game loop and enter the highscore screen 
+        // Highscore ENTRY if Score made top 3 
+        // Highscore LIST if score not top 3. 
+        
     }
     // Check for TIMER reaching 0.
     if (playerData[0] == 0) {
-        // DEAD!
+        // You Run OUT of time. 
+        // We are going to INTERRUPT the game loop and enter the highscore screen
+        // Highscore ENTRY if Score made top 3
+        // Highscore LIST if score not top 3.
     }
 }
 
